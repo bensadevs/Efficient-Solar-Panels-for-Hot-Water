@@ -1,143 +1,284 @@
-import base64
-import matplotlib
-from io import BytesIO
+
 import pandas as pd
-import matplotlib.pyplot as plt
 from flask import Flask, render_template_string
 
 app = Flask(__name__)
 
-matplotlib.use('Agg')
 filename= 'PANELLOG.csv'
 # filename = '/Volumes/SOLAR PANEL/LOG.CSV'
 df = pd.read_csv(filename, names=['time', 'voltage', 'current', 'temperature'])
-print(df)
+# print(df)
 
-def generate_graph_html(title, xlabel, ylabel, xdata, ydata):
-    fig, ax = plt.subplots()
-    ax.plot(xdata, ydata)
-    ax.set_title(title)
-    ax.set_xlabel(xlabel)
-    ax.set_ylabel(ylabel)
+def generate_graphs_html(titles, xlabels, ylabels, xdatas, ydatas):
+	cards = ''
+	for i in range(len(titles)):
+		cards += '''
+		<div class="card">
+			<div class="card-header">
+				<h3>'''+titles[i]+'''</h3>
+			</div>
+			<div class="card-body">
+				<div class="chart-container">
+					<canvas class="chart" id="chart_'''+str(i)+'''"></canvas>
+				</div>
+			</div>
+		</div>
+		'''
+				
+	script = '''
+	<script>
+		titles = {titles};
+		xlabels = {xlabels};
+		ylabels = {ylabels};
+		xdatas = {xdatas};
+		ydatas = {ydatas};
+	'''
+	script =  script.format(titles=titles,xlabels=xlabels,ylabels=ylabels,xdatas=xdatas,ydatas=ydatas,qty=len(titles))
 
-    buffer = BytesIO()
-    fig.savefig(buffer, format='png')
-    buffer.seek(0)
-    encoded_image = base64.b64encode(buffer.getvalue()).decode()
+	script += '''
+	for (var i = 0; i < titles.length; i++) {
+			var ctx = document.getElementById("chart_"+i).getContext("2d");
+			console.log(titles);
+			console.log(xlabels);
+			console.log(ylabels);
+			var chart = new Chart(ctx, {
+				type: "line",
+				data: {
+					labels: xdatas[i],
+					datasets: [{
+						label: titles[i],
+						data: ydatas[i],
+						fill: false,
+						borderColor: "#FFFFFF",
+						pointBackgroundColor: "#FFFFFF"
+					}]
+				},
+				options: {
+					responsive: true,
+					maintainAspectRatio: false,
+					scales: {
+						yAxes: [{
+							ticks: {
+								beginAtZero: true,
+								fontColor: "#FFFFFF"
+							},
+							gridLines: {
+								color: "rgba(255, 255, 255, 0.1)",
+								zeroLineColor: "rgba(255, 255, 255, 0.1)"
+							}
+						}],
+						xAxes: [{
+							ticks: {
+								fontColor: "#FFFFFF"
+							},
+							gridLines: {
+								color: "rgba(255, 255, 255, 0.1)"
+							}
+						}]
+					},
+					legend: {
+						labels: {
+							fontColor: "#FFFFFF"
+						}
+					},
+					tooltips: {
+						callbacks: {
+							labelColor: function(tooltipItem, chart) {
+								return {
+									borderColor: "#FFFFFF",
+									backgroundColor: "#FFFFFF"
+								};
+							}
+						}
+					}
+				}
+			});
+		}
+	</script>
+	'''
+	return cards, script
 
-    html = '''
-    <div class="graph-container">
-        <h3>{title}</h3>
-        <img src="data:image/png;base64,{encoded_image}">
-    </div>
-    '''
-    return html.format(title=title, encoded_image=encoded_image)
+def generate_metrics(labels, data, suffix):
+	card = '''
+	<div class="card">
+		<div class="card-header">
+			<h3>{titles[0]}</h3>
+		</div>
+		<div class="card-body">
+			<div class="row">
+				<div class="column-2">
+					<h4>{titles[1]}</h4>
+					<p>{data[0]}{suffix[0]}</p>
+				</div>
+				<div class="column-2">
+					<h4>{titles[2]}</h4>
+					<p>{data[1]}{suffix[1]}</p>
+				</div>
+				<div class="column-2">
+					<h4>{titles[3]} </h4>
+					<p>{data[2]}{suffix[2]}</p>
+				</div>
+			</div>
+		</div>
+	</div>
+	'''
+	return card.format(titles = labels, data = data , suffix = suffix )
+	# return ["Panel "+str(i+1) + ": Generated " +str(power_generated[i]) +"W today. Cost: "+"${:.2f}".format(cost[i]) for i in range(0,len(power_generated))]
 
-def panel_summary(power_generated, cost):
-    return ["Panel "+str(i+1) + ": Generated " +str(power_generated[i]) +"W today. Cost: "+"${:.2f}".format(cost[i]) for i in range(0,len(power_generated))]
 
 
 @app.route('/')
 def display_page():
-    graphs_html = [
-        generate_graph_html('Temperature vs Time', 'Time (s)', 'Temperature (C)', df['time'], df['temperature']),
-        generate_graph_html('Voltage vs Time', 'Time (s)', 'Voltage (V)', df['time'], df['voltage']),
-        generate_graph_html('Current vs Time', 'Time (s)', 'Current (A)', df['time'], df['current'])
-    ]
-    panel_list = panel_summary([200,300,100],[20,30,10])
-    
-    boston_temp = 45
+	graphlabels = [
+		'Temperature vs Time', 
+		'Voltage vs Time', 
+		'Current vs Time'
+	]
+	xlabels = [
+		'Time (s)',
+		'Time (s)',
+		'Time (s)'
+	]
+	ylabels = [
+		'Temperature (C)',
+		'Voltage (V)',
+		'Current (A)'
+	]
+	graphs_data = [
+		[df['time'], df['temperature']],
+		[df['time'], df['voltage']],
+		[df['temperature'], df['voltage']]
+	]
+	xdatas = [list(graphs_data[i][0])[6000:15000] for i in range(0,len(graphs_data))]
+	ydatas = [list(graphs_data[i][1])[6000:15000] for i in range(0,len(graphs_data))]
 
-    html_template = '''
-    <!DOCTYPE html>
-    <html>
-    <head>
-    <style>
-        /* Set the background color */
-        .main {
-        display: flex;
-        flex-direction: row;
-        justify-content: center;
-        height: 100%
-        align-items: center;
-        background-color: #494949;
-        transition: box-shadow 0.3s ease-in-out;
-        }
+	graphs, script = generate_graphs_html(graphlabels,xlabels,ylabels,xdatas,ydatas)
 
-        .right-container {
-        display: flex;
-        flex-direction: column;
-        justify-content: center;
-        align-items: center;
-        height: 500px;
-        width: 50%;
-        margin: 20px;
-        background-color: #A9A9A9;
-        transition: box-shadow 0.3s ease-in-out;
-        }
-        .right-container:hover {
-        box-shadow: 3px 3px #333;
-        }
+	metriclabels = ['Metrics','Total Power Generated','Heat Pump Power Consumption','Cost Savings <br> </br>']
+	metrics = generate_metrics(metriclabels, [20,30,50],[' MWh', ' MWh','%'])
+	
+	kpilabels = ['Cooling System KPIs', 'Temperature Outside','Water Tank Temperature','Solar Panel Temperature']
+	kpis = generate_metrics(kpilabels, [30,20,25] ,['º', 'º','º'])
 
-        .left-container {
-        display: flex;
-        flex-direction: column;
-        justify-content: center;
-        align-items: center;
-        height: 1600px;
-        width: 50%;
-        margin: 20px;
-        background-color: #A9A9A9;
-        transition: box-shadow 0.3s ease-in-out;
-        }
-        .graph-container:hover {
-        box-shadow: 8px 8px #333;
-        }
-        .panel-list-container {
-        width: 100%;
-        height: 50%;
-        border: 1px solid black;
-        display: inline-block;
-        margin-bottom: 20px;
-        padding: 10px;
-        background-color: #fff;
-        }
 
-        .weather-container {
-        width: 100%;
-        height: 50%;
-        border: 1px solid black;
-        display: inline-block;
-        font-size: 20px;
-        background-color: #fff;
-        }
-    </style>
-    </head>
-    <body>
-    <div class="main">
-        <div class="left-container">
-                <div class="graphs">
-                {{graphs | safe}}
-                </div>
-        </div>
-        <div class="right-container">
-            <div class="panel-list-container">
-                Solar Panel List
-                <br>
-                {{panel_data | safe}}
-            </div>
-            <div class="weather-container">
-                Weather in Boston, MA: {{temp}}º F and Sunny
-            </div>
-        </div>
-    </div>
-    </div>
-    </div>
-    </body>
-    </html>
+	dashboard_string = '''
+<!DOCTYPE html>
+<html>
+<head>
+	<title>Solar Power Dashboard</title>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+	<style type="text/css">
+		body {
+			background-color: #373E4C;
+			color: #FFFFFF;
+			font-family: "Helvetica Neue",Helvetica,Arial,sans-serif;
+			font-size: 14px;
+			line-height: 1.42857143;
+			margin: 0;
+			padding: 0;
+		}
+		.jumbotron {
+			background-color: #373E4C;
+			border-radius: 0;
+			margin-bottom: 0;
+			padding: 2rem;
+			text-align: center;
+		}
+		.jumbotron h1 {
+			font-size: 3rem;
+			margin-bottom: 0;
+		}
+		.jumbotron p {
+			font-size: 1.5rem;
+			margin-bottom: 0;
+		}
+		.container {
+			padding: 0;
+			display: flex;
+			flex-wrap: wrap;
+			align-items: flex-start;
+		}
+		.column{
+			flex: 1;
+			align-self: flex-start;
+			position: relative;
+			max-width: 800px;
+		}
+		.row {
+			padding: 0;
+			display: flex;
+			flex-wrap: wrap;
+			align-items: flex-start;
+		}
+		.row h4 {
+			font-size: 1.5rem;
+		}
+		.column-2{
+			flex: 1;
+			align-self: flex-start;
+			position: relative;
+			max-width: 400px;
+			text-align: center;
+		}
 
-    '''
-    return render_template_string(html_template, graphs=''.join(graphs_html),temp = boston_temp, panel_data = '<br></br>'.join(panel_list))
+		.card {
+			background-color: #373E4C;
+			border: none;
+			padding: 1rem;
+		}
+		.card-header {
+			background-color: #282C35;
+			border-radius: 5px;
+			padding: .75rem 1.25rem;
+		}
+		.card-header h3 {
+			color: #FFFFFF;
+			font-size: 1.25rem;
+			margin: 0;
+		}
+		.chart-container {
+			position: relative;
+			margin: auto;
+			height: 40vh;
+			min-height: 300px;
+			width: 70vw;
+			max-width: 600px;
+		}
+		.chart {
+			height: 100%;
+			width: 100%;
+		}
+		@media (max-width: 767px) {
+			.chart-container {
+				height: 60vh;
+				width: 90vw;
+			}
+		}
+	</style>
+</head>
+<body>
+	<div class="jumbotron">
+		<h1>Solar Power Dashboard</h1>
+		<p>Real-time solar power output tracking</p>
+	</div>
+	<div class="container">
+		<div class="column" >
+			{{graphs | safe}}
+		</div>
+		<div class="column">
+			{{metrics | safe}}
+			{{kpis | safe}}
+			</div>
+		</div>
+	</div>	
+	{{script | safe}}
+</body>
+</html>
+'''
+
+	return render_template_string(dashboard_string, graphs=graphs, script = script, metrics = metrics, kpis = kpis)
 
 if __name__ == '__main__':
-    app.run(debug=True)
+	app.run(debug=True)
