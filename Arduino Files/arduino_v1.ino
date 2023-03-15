@@ -3,12 +3,13 @@
 #include <SD.h>
 
 #define relay_port 6
+#define current_sensor 0
 #define thermistor 5
 #define battery 2
 #define sdPort 10
 #define Rbat2 10000 // ohms
 #define Rtherm2 100000 // ohms
-char logFilename[] = "log.csv";
+char logFilename[] = "panellog.csv";
 
 //serial monitor print while writing log
 boolean serialPrint = true;//true or false 
@@ -43,12 +44,14 @@ void setup() {
    }
 }
 
-void writeToLog(float voltage, float temp ) {
+void writeToLog(float voltage, float current, float temp ) {
     if (sdPrint){ 
       myFile = SD.open(logFilename, FILE_WRITE);
       myFile.print(millis()/1000);
       myFile.print(", ");
       myFile.print(voltage);
+      myFile.print(", ");
+      myFile.print(current);
       myFile.print(", ");  
       myFile.println(temp);  
       // close the file:
@@ -63,6 +66,8 @@ void writeToLog(float voltage, float temp ) {
          Serial.print(millis()/1000);
          Serial.print(", ");
          Serial.print(voltage);
+         Serial.print(", ");
+         Serial.print(current);
          Serial.print(", ");  
          Serial.println(temp);
     } 
@@ -76,6 +81,13 @@ void loop() {
   float Rtherm = Rtherm2 * (1023.0 / (float)Vtherm - 1.0);
   float c1 = 1.009249522e-03, c2 = 2.378405444e-04, c3 = 2.019202697e-07;
   float Temp = (1.0 / (c1 + c2*log(Rtherm) + c3*log(Rtherm)*log(Rtherm)*log(Rtherm))) - 273.15;
+  float current = 0.0, avgCurrent = 0.0, prevCurrent = 0.0, alpha = 0.1;
+  for(int i=0; i<1000;i++) {
+    current = (analogRead(current_sensor)/1024.0*5000.0-2500.0)/66.0;
+    current = alpha * current + (1-alpha)*prevCurrent;
+    avgCurrent += current/1000;
+    prevCurrent = current;
+  } 
   
 
 //  if(Temp > 20) {
@@ -87,5 +99,5 @@ void loop() {
 
   delay(900);
 
-  writeToLog(Vopencircuit*(100+10)/10, Temp);
+  writeToLog(Vopencircuit*(100+10)/10, avgCurrent+0.22, Temp);
  }
