@@ -32,6 +32,12 @@ def generate_graphs_html(titles, xlabels, ylabels, xdatas, ydatas):
 		ylabels = {ylabels};
 		xdatas = {xdatas};
 		ydatas = {ydatas};
+		map = xdatas.map(function (x, i) {{
+			return x.map(function (x, j) {{
+				return {{x: x, y: ydatas[i][j]}};
+			}});
+		}});
+		console.log(map);
 	'''
 	script =  script.format(titles=titles,xlabels=xlabels,ylabels=ylabels,xdatas=xdatas,ydatas=ydatas,qty=len(titles))
 
@@ -42,40 +48,35 @@ def generate_graphs_html(titles, xlabels, ylabels, xdatas, ydatas):
 			console.log(xlabels);
 			console.log(ylabels);
 			var chart = new Chart(ctx, {
-				type: "line",
+				type: "scatter",
 				data: {
-					labels: xdatas[i],
 					datasets: [{
 						label: titles[i],
-						data: ydatas[i],
-						fill: false,
-						borderColor: "#FFFFFF",
-						pointBackgroundColor: "#FFFFFF"
+						data: map[i],
+						borderColor: 'rgba(255, 255, 255, 0.25)',
+						backgroundColor: 'rgba(255, 99, 132, 0.2)',
 					}]
 				},
 				options: {
-					responsive: true,
-					maintainAspectRatio: false,
 					scales: {
-						yAxes: [{
-							ticks: {
-								beginAtZero: true,
-								fontColor: "#FFFFFF"
-							},
-							gridLines: {
-								color: "rgba(255, 255, 255, 0.1)",
-								zeroLineColor: "rgba(255, 255, 255, 0.1)"
+						xAxes: [{
+							type: 'linear',
+							position: 'bottom',
+							scaleLabel: {
+								display: true,
+								labelString: 'X Axis Label'
 							}
 						}],
-						xAxes: [{
-							ticks: {
-								fontColor: "#FFFFFF"
-							},
-							gridLines: {
-								color: "rgba(255, 255, 255, 0.1)"
+						yAxes: [{
+							type: 'linear',
+							position: 'left',
+							scaleLabel: {
+								display: true,
+								labelString: 'Y Axis Label'
 							}
 						}]
 					},
+					responsive: true,
 					legend: {
 						labels: {
 							fontColor: "#FFFFFF"
@@ -132,25 +133,41 @@ def display_page():
 	graphlabels = [
 		'Temperature vs Time', 
 		'Voltage vs Time', 
-		'Current vs Time'
+		'Current vs Time',
+		'Temperature vs Voltage'
 	]
 	xlabels = [
 		'Time (s)',
 		'Time (s)',
-		'Time (s)'
+		'Time (s)',
+		'Temperature (C)'
 	]
 	ylabels = [
 		'Temperature (C)',
 		'Voltage (V)',
-		'Current (A)'
+		'Current (A)',
+		'Voltage (V)'
 	]
 	graphs_data = [
 		[df['time'], df['temperature']],
 		[df['time'], df['voltage']],
+		[df['time'], df['current']],
 		[df['temperature'], df['voltage']]
 	]
-	xdatas = [list(graphs_data[i][0])[6000:15000] for i in range(0,len(graphs_data))]
-	ydatas = [list(graphs_data[i][1])[6000:15000] for i in range(0,len(graphs_data))]
+	# RUN A
+	a= 0
+	b = 5000
+	# RUN B
+	# a= 5500
+	# b = 10000
+	# RUN C
+	# a= 12100
+	# b = 21500
+	
+
+
+	xdatas = [list(graphs_data[i][0])[a:b] for i in range(0,len(graphs_data))]
+	ydatas = [list(graphs_data[i][1])[a:b] for i in range(0,len(graphs_data))]
 
 	graphs, script = generate_graphs_html(graphlabels,xlabels,ylabels,xdatas,ydatas)
 
@@ -158,7 +175,7 @@ def display_page():
 	metrics = generate_metrics(metriclabels, [20,30,50],[' MWh', ' MWh','%'])
 	
 	kpilabels = ['Cooling System KPIs', 'Temperature Outside','Water Tank Temperature','Solar Panel Temperature']
-	kpis = generate_metrics(kpilabels, [30,20,25] ,['º', 'º','º'])
+	kpis = generate_metrics(kpilabels, [20,38,32] ,['º', 'º','º'])
 
 
 	dashboard_string = '''
