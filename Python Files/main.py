@@ -1,6 +1,6 @@
 
 import pandas as pd
-from flask import Flask, render_template_string
+from flask import Flask, render_template_string, request
 
 app = Flask(__name__)
 
@@ -9,13 +9,13 @@ filename= 'PANELLOG.csv'
 df = pd.read_csv(filename, names=['time', 'voltage', 'current', 'temperature'])
 # print(df)
 
-def generate_graphs_html(titles, xlabels, ylabels, xdatas, ydatas):
+def generate_graphs_html(graphs):
 	cards = ''
-	for i in range(len(titles)):
+	for i in range(len(graphs)):
 		cards += '''
 		<div class="card">
 			<div class="card-header">
-				<h3>'''+titles[i]+'''</h3>
+				<h3>'''+graphs[i]['title']+'''</h3>
 			</div>
 			<div class="card-body">
 				<div class="chart-container">
@@ -27,32 +27,19 @@ def generate_graphs_html(titles, xlabels, ylabels, xdatas, ydatas):
 				
 	script = '''
 	<script>
-		titles = {titles};
-		xlabels = {xlabels};
-		ylabels = {ylabels};
-		xdatas = {xdatas};
-		ydatas = {ydatas};
-		map = xdatas.map(function (x, i) {{
-			return x.map(function (x, j) {{
-				return {{x: x, y: ydatas[i][j]}};
-			}});
-		}});
-		console.log(map);
+		graphs = {graphs};
 	'''
-	script =  script.format(titles=titles,xlabels=xlabels,ylabels=ylabels,xdatas=xdatas,ydatas=ydatas,qty=len(titles))
+	script =  script.format(graphs=graphs,qty=len(graphs))
 
 	script += '''
-	for (var i = 0; i < titles.length; i++) {
+	for (var i = 0; i < graphs.length; i++) {
 			var ctx = document.getElementById("chart_"+i).getContext("2d");
-			console.log(titles);
-			console.log(xlabels);
-			console.log(ylabels);
 			var chart = new Chart(ctx, {
 				type: "scatter",
 				data: {
 					datasets: [{
-						label: titles[i],
-						data: map[i],
+						label: graphs[i]['title'],
+						data: graphs[i]['data'],
 						borderColor: 'rgba(255, 255, 255, 0.25)',
 						backgroundColor: 'rgba(255, 99, 132, 0.2)',
 					}]
@@ -64,7 +51,7 @@ def generate_graphs_html(titles, xlabels, ylabels, xdatas, ydatas):
 							position: 'bottom',
 							scaleLabel: {
 								display: true,
-								labelString: 'X Axis Label'
+								labelString: graphs[i]['xlabel']
 							}
 						}],
 						yAxes: [{
@@ -72,7 +59,7 @@ def generate_graphs_html(titles, xlabels, ylabels, xdatas, ydatas):
 							position: 'left',
 							scaleLabel: {
 								display: true,
-								labelString: 'Y Axis Label'
+								labelString: graphs[i]['ylabel']
 							}
 						}]
 					},
@@ -130,52 +117,52 @@ def generate_metrics(labels, data, suffix):
 
 @app.route('/')
 def display_page():
-	graphlabels = [
-		'Temperature vs Time', 
-		'Voltage vs Time', 
-		'Current vs Time',
-		'Temperature vs Voltage'
-	]
-	xlabels = [
-		'Time (s)',
-		'Time (s)',
-		'Time (s)',
-		'Temperature (C)'
-	]
-	ylabels = [
-		'Temperature (C)',
-		'Voltage (V)',
-		'Current (A)',
-		'Voltage (V)'
-	]
-	graphs_data = [
-		[df['time'], df['temperature']],
-		[df['time'], df['voltage']],
-		[df['time'], df['current']],
-		[df['temperature'], df['voltage']]
-	]
-	# RUN A
-	a= 0
-	b = 5000
-	# RUN B
-	# a= 5500
-	# b = 10000
-	# RUN C
-	# a= 12100
-	# b = 21500
+	
+	# RUNS
+	StartTimes= [0,5500,12100]
+	EndTimes = [5000,10000,18000]
+
+
+	# get url parameters
+	run = int(request.args.get('run', 0))-1
+	if not run:
+		run = 0
+
+	a = StartTimes[run]
+	b = EndTimes[run]
 	
 
+	#energy is integrate voltage over time
+	solar = round(sum(df['voltage'][a:b])/(b-a)*1.93,2)
+	pump = round(24*(b-a)/3600,2)
+	net = round(solar-pump,2)
 
-	xdatas = [list(graphs_data[i][0])[a:b] for i in range(0,len(graphs_data))]
-	ydatas = [list(graphs_data[i][1])[a:b] for i in range(0,len(graphs_data))]
 
-	graphs, script = generate_graphs_html(graphlabels,xlabels,ylabels,xdatas,ydatas)
+	graph_data = [{
+		'title': 'Temperature vs Time',
+		'xlabel': 'Time (s)',
+		'ylabel': 'Temperature (C)',
+		'data': [{'x': df['time'][i], 'y': df['temperature'][i]} for i in range(a,b)]
+	},	{
+		'title': 'Voltage vs Time',
+		'xlabel': 'Time (s)',
+		'ylabel': 'Voltage (V)',
+		'data': [{'x': df['time'][i], 'y': df['voltage'][i]} for i in range(a,b)]
+	},	{	
+		'title': 'Temperature vs Voltage',
+		'xlabel': 'Temperature (C)',
+		'ylabel': 'Voltage (V)',
+		'data': [{'x': df['temperature'][i], 'y': df['voltage'][i]} for i in range(a,b)]
+	}]
 
-	metriclabels = ['Metrics','Total Power Generated','Heat Pump Power Consumption','Cost Savings <br> </br>']
-	metrics = generate_metrics(metriclabels, [20,30,50],[' MWh', ' MWh','%'])
+	
+	graphs, script = generate_graphs_html(graph_data)
+
+	metriclabels = ['Metrics','Energy Generated <br> </br>','Pump Power Consumption' ,'Net Energy <br> </br>']
+	metrics = generate_metrics(metriclabels, [solar,pump,net],[' Wh', ' Wh',' Wh'])
 	
 	kpilabels = ['Cooling System KPIs', 'Temperature Outside','Water Tank Temperature','Solar Panel Temperature']
-	kpis = generate_metrics(kpilabels, [20,38,32] ,['º', 'º','º'])
+	kpis = generate_metrics(kpilabels, [20,38,df['temperature'][b]] ,['º', 'º','º'])
 
 
 	dashboard_string = '''
@@ -267,6 +254,18 @@ def display_page():
 			height: 100%;
 			width: 100%;
 		}
+		.button {
+			flex: 1;
+			margin: 0px 30px 0px 30px;
+			background-color: #282C35;
+			border: none;
+			color: white;
+			padding: 15px 32px;
+			text-align: center;
+			border-radius: 5px;
+			font-size: 1rem;
+			font-weight: bold;
+		}
 		@media (max-width: 767px) {
 			.chart-container {
 				height: 60vh;
@@ -280,8 +279,14 @@ def display_page():
 		<h1>Solar Power Dashboard</h1>
 		<p>Real-time solar power output tracking</p>
 	</div>
+	<div class="row" style="margin: 0px 300px 20px 300px ">
+				<button class ="button" onclick="window.location.href = '/?run=1';">Run 1</button>
+				<button class ="button" onclick="window.location.href = '/?run=2';">Run 2</button>
+				<button class ="button" onclick="window.location.href = '/?run=3';">Run 3</button>
+	</div>
 	<div class="container">
 		<div class="column" >
+			
 			{{graphs | safe}}
 		</div>
 		<div class="column">
