@@ -10,3 +10,7 @@ So far, we've built a cooling system for the solar panel by welding copper tubin
 
 <img src="Images/copper tubing.jpg" width="500">
 <img src="Images/wooden frame.jpg" width="1000">
+
+Our Dashboard is built using flask and will be hosted on a Raspberry Pi. The dashboard will display the temperature of the water tank, the temperature of the solar panel, and the temperature of the copper tubing. The dashboard will also display the amount of energy saved by using our system. See image below:
+
+<img src="Images/dashboard.png" width=500>
