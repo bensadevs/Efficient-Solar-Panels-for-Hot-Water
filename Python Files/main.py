@@ -1,5 +1,6 @@
 
 import pandas as pd
+import serial
 from flask import Flask, render_template_string, request
 
 app = Flask(__name__)
@@ -8,6 +9,14 @@ filename= 'PANELLOG.csv'
 # filename = '/Volumes/SOLAR PANEL/LOG.CSV'
 df = pd.read_csv(filename, names=['time', 'voltage', 'current', 'temperature'])
 # print(df)
+
+ser = serial.Serial('/dev/ttyUSB0', 9600) # Change to the appropriate port
+
+def read_serial_data():
+    data = ser.readline().decode().rstrip().split(",")
+    if len(data) == 4:
+        return {'time': float(data[0]), 'voltage': float(data[1]), 'current': float(data[2]), 'temperature': float(data[3])}
+    return None
 
 def generate_graphs_html(graphs):
 	cards = ''
@@ -131,6 +140,11 @@ def display_page():
 	a = StartTimes[run]
 	b = EndTimes[run]
 	
+
+	if df:
+		data = read_serial_data()
+		df = df.append(data, ignore_index=True)
+		df.to_csv('PANELLOG.csv', index=False)
 
 	#energy is integrate voltage over time
 	solar = round(sum(df['voltage'][a:b])/(b-a)*1.93,2)
