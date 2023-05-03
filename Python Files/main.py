@@ -7,15 +7,15 @@ app = Flask(__name__)
 
 filename= 'PANELLOG.csv'
 # filename = '/Volumes/SOLAR PANEL/LOG.CSV'
-df = pd.read_csv(filename, names=['time', 'voltage', 'current', 'temperature'])
-# print(df)
+recorded_data = pd.read_csv(filename, names=['time', 'voltage', 'current', 'temperature'])
 
 ser = serial.Serial('/dev/ttyUSB0', 9600) # Change to the appropriate port
+live_data = pd.DataFrame(columns=['time', 'voltage', 'voltage_control_exp', 'temperature'])
 
 def read_serial_data():
     data = ser.readline().decode().rstrip().split(",")
     if len(data) == 4:
-        return {'time': float(data[0]), 'voltage': float(data[1]), 'current': float(data[2]), 'temperature': float(data[3])}
+        return {'time': float(data[0]), 'voltage': float(data[1]), 'voltage_control_exp': float(data[2]), 'temperature': float(data[3])}
     return None
 
 def generate_graphs_html(graphs):
@@ -133,18 +133,21 @@ def display_page():
 
 
 	# get url parameters
-	run = int(request.args.get('run', 0))-1
-	if not run:
-		run = 0
-
-	a = StartTimes[run]
-	b = EndTimes[run]
+	run = int(request.args.get('run', 0))
+	if run == -1:
+		df = live_data
+		a = 0
+		b = len(df)
+	else:
+		df = recorded_data
+		a = StartTimes[run-1]
+		b = EndTimes[run-1]
 	
 
-	if df:
+	if live_data:
 		data = read_serial_data()
-		df = df.append(data, ignore_index=True)
-		df.to_csv('PANELLOG.csv', index=False)
+		live_data = df.append(data, ignore_index=True)
+		live_data.to_csv('live_data.csv', index=False)
 
 	#energy is integrate voltage over time
 	solar = round(sum(df['voltage'][a:b])/(b-a)*1.93,2)
@@ -158,16 +161,26 @@ def display_page():
 		'ylabel': 'Temperature (C)',
 		'data': [{'x': df['time'][i], 'y': df['temperature'][i]} for i in range(a,b)]
 	},	{
-		'title': 'Voltage vs Time',
+		'title': 'Voltage vs Time (Heated)',
 		'xlabel': 'Time (s)',
 		'ylabel': 'Voltage (V)',
 		'data': [{'x': df['time'][i], 'y': df['voltage'][i]} for i in range(a,b)]
-	},	{	
+	}]
+	
+	if run == 0:
+		graph_data.append({	
+		'title': 'Voltage vs Time (Unheated)',
+		'xlabel': 'Time (s)',
+		'ylabel': 'Voltage (V)',
+		'data': [{'x': df['time'][i], 'y': df['voltage_control_exp'][i]} for i in range(a,b)]
+	})
+	else:
+		graph_data.append({	
 		'title': 'Temperature vs Voltage',
 		'xlabel': 'Temperature (C)',
 		'ylabel': 'Voltage (V)',
 		'data': [{'x': df['temperature'][i], 'y': df['voltage'][i]} for i in range(a,b)]
-	}]
+	})
 
 	
 	graphs, script = generate_graphs_html(graph_data)
@@ -297,6 +310,7 @@ def display_page():
 				<button class ="button" onclick="window.location.href = '/?run=1';">Run 1</button>
 				<button class ="button" onclick="window.location.href = '/?run=2';">Run 2</button>
 				<button class ="button" onclick="window.location.href = '/?run=3';">Run 3</button>
+				<button class ="button" onclick="window.location.href = '/?run=-1';">Live Data</button>
 	</div>
 	<div class="container">
 		<div class="column" >
